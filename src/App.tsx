@@ -15,11 +15,12 @@ import {
   MessageSquare,
   Link as LinkIcon,
   CheckCircle2,
-  FileJson
+  FileJson,
+  Activity
 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 
-type CognitiveDomain = 'Learning' | 'Metacognition' | 'Attention' | 'Executive Function' | 'Social Cognition';
+type CognitiveDomain = 'Learning' | 'Metacognition' | 'Attention' | 'Executive Function' | 'Social Cognition' | 'Cognitive Load';
 
 interface BenchmarkTask {
   id: string;
@@ -30,14 +31,16 @@ interface BenchmarkTask {
   variables: string[];
   evaluationCriteria: string;
   kaggleLink?: string;
+  isCustom?: boolean;
 }
 
-const DOMAINS: { name: CognitiveDomain; icon: React.ElementType; desc: string }[] = [
+const DOMAINS: { name: CognitiveDomain; icon: React.ElementType; desc: string; isCustom?: boolean }[] = [
   { name: 'Learning', icon: Lightbulb, desc: 'Acquiring new, novel concepts in-context.' },
   { name: 'Metacognition', icon: Brain, desc: 'Self-awareness of knowledge limits and confidence.' },
   { name: 'Attention', icon: Eye, desc: 'Focusing on relevant data amidst noise.' },
   { name: 'Executive Function', icon: Zap, desc: 'Adapting to changing rules and planning.' },
   { name: 'Social Cognition', icon: Users, desc: 'Theory of Mind and asymmetric information.' },
+  { name: 'Cognitive Load', icon: Activity, desc: 'Measuring hallucination rates under high intrinsic load.', isCustom: true },
 ];
 
 const TEMPLATES: Record<CognitiveDomain, BenchmarkTask> = {
@@ -90,6 +93,16 @@ const TEMPLATES: Record<CognitiveDomain, BenchmarkTask> = {
     variables: ['Irrelevant Text 1', 'Hidden Target Fact', 'Irrelevant Text 2', 'Target Subject'],
     evaluationCriteria: 'Did the model successfully locate the target fact despite the noise?',
     kaggleLink: 'https://share.google/PiuV5XggwTh0WDnSV'
+  },
+  'Cognitive Load': {
+    id: 'cl-01',
+    domain: 'Cognitive Load',
+    title: 'Intrinsic Load Stress Test',
+    systemPrompt: 'You are an AI assistant. You must answer the user\'s question while strictly adhering to the following constraints: 1. Do not use the letter "e". 2. Answer in exactly 3 sentences. 3. The final word must be "blue".',
+    userPromptTemplate: 'Question: Explain the process of [Complex Process].\n\nRemember the constraints: No letter "e", exactly 3 sentences, end with "blue".',
+    variables: ['Complex Process'],
+    evaluationCriteria: 'Did the model hallucinate facts or break constraints under high cognitive load?',
+    isCustom: true
   }
 };
 
@@ -114,19 +127,20 @@ const generateMockData = (variables: string[]) => {
     else if (v.includes('Hidden Target Fact')) mockData[v] = 'The secret launch code is 84729.';
     else if (v.includes('Irrelevant Text 2')) mockData[v] = 'Modern farming techniques involve crop rotation and synthetic fertilizers.';
     else if (v.includes('Target Subject')) mockData[v] = 'secret launch code';
+    else if (v.includes('Complex Process')) mockData[v] = 'photosynthesis';
     else mockData[v] = `Sample ${v}`;
   });
   return mockData;
 };
 
 export default function App() {
-  const [activeDomain, setActiveDomain] = useState<CognitiveDomain>('Social Cognition');
+  const [activeDomain, setActiveDomain] = useState<CognitiveDomain>('Cognitive Load');
   
   // Form State
-  const [taskTitle, setTaskTitle] = useState(TEMPLATES['Social Cognition'].title);
-  const [systemPrompt, setSystemPrompt] = useState(TEMPLATES['Social Cognition'].systemPrompt);
-  const [userPrompt, setUserPrompt] = useState(TEMPLATES['Social Cognition'].userPromptTemplate);
-  const [evalCriteria, setEvalCriteria] = useState(TEMPLATES['Social Cognition'].evaluationCriteria);
+  const [taskTitle, setTaskTitle] = useState(TEMPLATES['Cognitive Load'].title);
+  const [systemPrompt, setSystemPrompt] = useState(TEMPLATES['Cognitive Load'].systemPrompt);
+  const [userPrompt, setUserPrompt] = useState(TEMPLATES['Cognitive Load'].userPromptTemplate);
+  const [evalCriteria, setEvalCriteria] = useState(TEMPLATES['Cognitive Load'].evaluationCriteria);
   
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -202,42 +216,51 @@ export default function App() {
                 <button
                   key={domain.name}
                   onClick={() => setActiveDomain(domain.name)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors ${
                     isActive 
                       ? 'bg-white/10 text-white font-medium' 
                       : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400' : ''}`} />
-                  {domain.name}
+                  <div className="flex items-center gap-3">
+                    <Icon className={`w-4 h-4 ${isActive ? (domain.isCustom ? 'text-purple-400' : 'text-emerald-400') : ''}`} />
+                    {domain.name}
+                  </div>
+                  {domain.isCustom && (
+                    <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Custom</span>
+                  )}
                 </button>
               );
             })}
           </nav>
 
-          <div className="px-4 mt-8 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-            Kaggle Integration
-          </div>
-          <div className="px-4 space-y-3">
-            <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-200 mb-1">
-                <LinkIcon className="w-4 h-4 text-blue-400" />
-                Linked Resource
+          {TEMPLATES[activeDomain].kaggleLink && (
+            <>
+              <div className="px-4 mt-8 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                Kaggle Integration
               </div>
-              <a 
-                href={TEMPLATES[activeDomain].kaggleLink} 
-                target="_blank" 
-                rel="noreferrer"
-                className="text-xs text-blue-400 hover:text-blue-300 truncate block transition-colors"
-                title={TEMPLATES[activeDomain].kaggleLink}
-              >
-                {TEMPLATES[activeDomain].kaggleLink}
-              </a>
-              <p className="text-[10px] text-gray-500 mt-2">
-                Official Kaggle requirement doc for {activeDomain}.
-              </p>
-            </div>
-          </div>
+              <div className="px-4 space-y-3">
+                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                  <div className="flex items-center gap-2 text-sm font-medium text-gray-200 mb-1">
+                    <LinkIcon className="w-4 h-4 text-blue-400" />
+                    Linked Resource
+                  </div>
+                  <a 
+                    href={TEMPLATES[activeDomain].kaggleLink} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="text-xs text-blue-400 hover:text-blue-300 truncate block transition-colors"
+                    title={TEMPLATES[activeDomain].kaggleLink}
+                  >
+                    {TEMPLATES[activeDomain].kaggleLink}
+                  </a>
+                  <p className="text-[10px] text-gray-500 mt-2">
+                    Official Kaggle requirement doc for {activeDomain}.
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
         </div>
         
         <div className="p-4 border-t border-white/10">
@@ -253,7 +276,12 @@ export default function App() {
         {/* Header */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
           <div>
-            <h2 className="text-lg font-medium text-gray-900">{activeDomain} Benchmark</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-medium text-gray-900">{activeDomain} Benchmark</h2>
+              {TEMPLATES[activeDomain].isCustom && (
+                <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider">Unique Submission</span>
+              )}
+            </div>
             <p className="text-sm text-gray-500">{DOMAINS.find(d => d.name === activeDomain)?.desc}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -292,13 +320,27 @@ export default function App() {
           <div className="flex-1 overflow-y-auto p-8 border-r border-gray-200 bg-white">
             <div className="max-w-3xl mx-auto space-y-8">
               
+              {activeDomain === 'Cognitive Load' && (
+                <div className="bg-purple-50 border border-purple-200 rounded-xl p-6 mb-8">
+                  <h3 className="text-purple-900 font-semibold mb-2 flex items-center gap-2">
+                    <Activity className="w-5 h-5" />
+                    Why this sets your submission apart
+                  </h3>
+                  <p className="text-sm text-purple-800 leading-relaxed">
+                    Most benchmarks test what a model knows. <strong>Cognitive Load Theory</strong> tests how a model <em>fails</em>. By artificially increasing the "intrinsic load" (e.g., forcing strict formatting constraints, forbidding certain letters, or requiring specific syntactic structures), you exhaust the model's attention mechanism. 
+                    <br/><br/>
+                    When cognitive load is maxed out, models are far more likely to hallucinate facts because their compute is tied up in constraint satisfaction. This is a highly novel approach to measuring AGI robustness that goes beyond standard recall tests.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Task Title</label>
                 <input 
                   type="text" 
                   value={taskTitle}
                   onChange={(e) => setTaskTitle(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#20BEFF]/20 focus:border-[#20BEFF] transition-all font-medium"
+                  className={`w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all font-medium ${TEMPLATES[activeDomain].isCustom ? 'focus:ring-purple-500/20 focus:border-purple-500' : 'focus:ring-[#20BEFF]/20 focus:border-[#20BEFF]'}`}
                 />
               </div>
 
@@ -311,20 +353,20 @@ export default function App() {
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   rows={3}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#20BEFF]/20 focus:border-[#20BEFF] transition-all text-sm font-mono resize-none"
+                  className={`w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all text-sm font-mono resize-none ${TEMPLATES[activeDomain].isCustom ? 'focus:ring-purple-500/20 focus:border-purple-500' : 'focus:ring-[#20BEFF]/20 focus:border-[#20BEFF]'}`}
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-sm font-medium text-gray-700">Procedural User Prompt Template</label>
-                  <span className="text-xs text-[#20BEFF] font-medium bg-[#20BEFF]/10 px-2 py-0.5 rounded">Use [Brackets] for variables</span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${TEMPLATES[activeDomain].isCustom ? 'text-purple-600 bg-purple-50' : 'text-[#20BEFF] bg-[#20BEFF]/10'}`}>Use [Brackets] for variables</span>
                 </div>
                 <textarea 
                   value={userPrompt}
                   onChange={(e) => setUserPrompt(e.target.value)}
                   rows={6}
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#20BEFF]/20 focus:border-[#20BEFF] transition-all text-sm font-mono resize-none"
+                  className={`w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all text-sm font-mono resize-none ${TEMPLATES[activeDomain].isCustom ? 'focus:ring-purple-500/20 focus:border-purple-500' : 'focus:ring-[#20BEFF]/20 focus:border-[#20BEFF]'}`}
                 />
               </div>
 
@@ -355,7 +397,7 @@ export default function App() {
                   type="text" 
                   value={evalCriteria}
                   onChange={(e) => setEvalCriteria(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#20BEFF]/20 focus:border-[#20BEFF] transition-all text-sm"
+                  className={`w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 transition-all text-sm ${TEMPLATES[activeDomain].isCustom ? 'focus:ring-purple-500/20 focus:border-purple-500' : 'focus:ring-[#20BEFF]/20 focus:border-[#20BEFF]'}`}
                   placeholder="e.g., Did the model correctly identify the false belief?"
                 />
               </div>
@@ -367,7 +409,7 @@ export default function App() {
           <div className="w-[400px] bg-gray-50 flex flex-col shrink-0">
             <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                <Play className="w-4 h-4 text-emerald-600" />
+                <Play className={`w-4 h-4 ${TEMPLATES[activeDomain].isCustom ? 'text-purple-600' : 'text-emerald-600'}`} />
                 Live Test (Gemini 3.1 Pro)
               </h3>
               <button 
@@ -428,7 +470,7 @@ export default function App() {
                   <h4 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-2">Evaluation Checklist</h4>
                   <div className="space-y-2">
                     <label className="flex items-start gap-2">
-                      <input type="checkbox" className="mt-1 rounded text-emerald-600 focus:ring-emerald-500" />
+                      <input type="checkbox" className={`mt-1 rounded focus:ring-2 ${TEMPLATES[activeDomain].isCustom ? 'text-purple-600 focus:ring-purple-500' : 'text-emerald-600 focus:ring-emerald-500'}`} />
                       <span className="text-sm text-gray-700">{evalCriteria}</span>
                     </label>
                   </div>
