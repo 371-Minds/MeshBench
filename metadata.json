@@ -1,0 +1,5 @@
+{
+  "name": "MetaBench: AGI Evaluator",
+  "description": "A no-code metasystemic platform for designing, testing, and deploying cognitive AI benchmarks for Kaggle.",
+  "requestFramePermissions": []
+}
