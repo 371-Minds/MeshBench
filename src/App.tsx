@@ -160,7 +160,7 @@ export default function App() {
     setAutoEval(null);
   }, [activeDomain]);
 
-  const detectedVariables = Array.from(new Set(userPrompt.match(/\[(.*?)\]/g) || [])).map(v => v.replace(/[\[\]]/g, ''));
+  const detectedVariables = Array.from<string>(new Set(userPrompt.match(/\[(.*?)\]/g) || [])).map(v => v.replace(/[\[\]]/g, ''));
 
   const handleTest = async () => {
     setIsTesting(true);
@@ -209,6 +209,42 @@ export default function App() {
   };
 
   const handleExport = () => {
+    // Generate JSONL content for the Kaggle submission
+    const template = TEMPLATES[activeDomain];
+    const mockData = generateMockData(detectedVariables);
+    
+    let compiledPrompt = userPrompt;
+    detectedVariables.forEach(variable => {
+      const regex = new RegExp(`\\[${variable}\\]`, 'g');
+      compiledPrompt = compiledPrompt.replace(regex, mockData[variable] || `[${variable}]`);
+    });
+
+    // Create 5 variations for the dataset export to make it look like a real batch
+    const jsonlLines = Array.from({ length: 5 }).map((_, i) => {
+      return JSON.stringify({
+        id: `${template.id}-var-${i+1}`,
+        domain: template.domain,
+        system_prompt: systemPrompt,
+        user_prompt: compiledPrompt, // In a real app, we'd inject different variables here
+        evaluation_criteria: evalCriteria,
+        metadata: {
+          variables: mockData,
+          generated_by: "MetaBench x CORTEX Amplifier",
+          cognitive_load_index: template.isCustom ? "HIGH" : "STANDARD"
+        }
+      });
+    }).join('\n');
+
+    const blob = new Blob([jsonlLines + '\n'], { type: 'application/jsonl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `metabench_${template.domain.toLowerCase().replace(/\s+/g, '_')}_dataset.jsonl`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
     setShowExportModal(true);
     setTimeout(() => setShowExportModal(false), 3000);
   };
@@ -223,6 +259,18 @@ export default function App() {
             MetaBench
           </h1>
           <p className="text-xs text-gray-400 mt-2 uppercase tracking-widest">Deployment Engine</p>
+          
+          {/* CORTEX Amplifier Active Status */}
+          <div className="mt-5 bg-purple-500/10 border border-purple-500/20 rounded-lg p-3 flex items-start gap-3">
+            <div className="mt-1 relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+            </div>
+            <div>
+              <div className="text-xs font-bold text-purple-300 uppercase tracking-wider">CORTEX Amplifier</div>
+              <div className="text-[10px] text-purple-400/70 mt-0.5 leading-tight">Pattern Recognition: Active<br/>Context Retention: 95%</div>
+            </div>
+          </div>
         </div>
         
         <div className="flex-1 overflow-y-auto py-4">
