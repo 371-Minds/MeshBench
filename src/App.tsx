@@ -16,7 +16,9 @@ import {
   Link as LinkIcon,
   CheckCircle2,
   FileJson,
-  Activity
+  Activity,
+  Check,
+  X
 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 
@@ -145,6 +147,7 @@ export default function App() {
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [autoEval, setAutoEval] = useState<{ sentences: number; eCount: number; lastWord: string } | null>(null);
 
   // Update form when domain changes
   useEffect(() => {
@@ -154,6 +157,7 @@ export default function App() {
     setUserPrompt(template.userPromptTemplate);
     setEvalCriteria(template.evaluationCriteria);
     setTestResult(null);
+    setAutoEval(null);
   }, [activeDomain]);
 
   const detectedVariables = Array.from(new Set(userPrompt.match(/\[(.*?)\]/g) || [])).map(v => v.replace(/[\[\]]/g, ''));
@@ -161,6 +165,7 @@ export default function App() {
   const handleTest = async () => {
     setIsTesting(true);
     setTestResult(null);
+    setAutoEval(null);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       
@@ -179,7 +184,23 @@ export default function App() {
         contents: fullPrompt,
       });
       
-      setTestResult(response.text || 'No response generated.');
+      const text = response.text || 'No response generated.';
+      setTestResult(text);
+
+      // Automated Evaluation for Cognitive Load
+      if (activeDomain === 'Cognitive Load') {
+        const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+        const eCount = (text.match(/e/gi) || []).length;
+        const words = text.replace(/[.!?]+$/, '').split(/\s+/);
+        const lastWord = words[words.length - 1]?.toLowerCase().replace(/[^a-z]/g, '');
+
+        setAutoEval({
+          sentences: sentences.length,
+          eCount: eCount,
+          lastWord: lastWord || ''
+        });
+      }
+
     } catch (error: any) {
       setTestResult(`Error: ${error.message}`);
     } finally {
@@ -465,7 +486,44 @@ export default function App() {
                 </div>
               </div>
               
-              {testResult && (
+              {/* Automated Evaluation for Cognitive Load */}
+              {autoEval && activeDomain === 'Cognitive Load' && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }} 
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-purple-50 border border-purple-200 rounded-lg p-4 shadow-sm"
+                >
+                  <h4 className="text-xs font-bold text-purple-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Activity className="w-4 h-4" />
+                    Automated Constraint Analysis
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-purple-800 font-medium">Sentence Count (Target: 3)</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono bg-white px-2 py-0.5 rounded border border-purple-100">{autoEval.sentences}</span>
+                        {autoEval.sentences === 3 ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4 text-red-500" />}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-purple-800 font-medium">Letter 'e' Count (Target: 1)</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono bg-white px-2 py-0.5 rounded border border-purple-100">{autoEval.eCount}</span>
+                        {autoEval.eCount === 1 ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4 text-red-500" />}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-purple-800 font-medium">Last Word (Target: "blue")</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-mono bg-white px-2 py-0.5 rounded border border-purple-100">"{autoEval.lastWord}"</span>
+                        {autoEval.lastWord === 'blue' ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4 text-red-500" />}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {testResult && activeDomain !== 'Cognitive Load' && (
                 <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                   <h4 className="text-xs font-semibold text-gray-900 uppercase tracking-wider mb-2">Evaluation Checklist</h4>
                   <div className="space-y-2">
